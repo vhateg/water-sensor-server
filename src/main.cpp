@@ -9,6 +9,7 @@
 volatile int pulses = 0; //variable that holds the number of pulses from flow sensor
 
 const int flow_pin = 21; //pin used by flow sensor
+const int temp_pin = 32; //pin used by flow sensor
 
 const char *SSID = "";
 const char *PWD = "";
@@ -122,7 +123,7 @@ void getData() {
   else pls = 0;
   //amount_difference = random(100);
   
-  float read = analogRead(32);
+  float read = analogRead(temp_pin);
   float r = (208896000/read)-51000;
   float temperature = (3828.21168/(log10(r/0.000145475)))-423.80602;
   add_json_object("amount_difference", amount_difference);
