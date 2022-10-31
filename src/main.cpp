@@ -8,10 +8,14 @@
 
 volatile int pulses = 0; //variable that holds the number of pulses from flow sensor
 
-const int flow_pin = 2; //pin used by flow sensor
+const int flow_pin = 21; //pin used by flow sensor
 
 const char *SSID = "";
 const char *PWD = "";
+
+IPAddress local_IP(192, 168, 47, 168);
+IPAddress gateway(192, 168, 47, 76);
+IPAddress subnet(255, 255, 255, 0);
 
 const float a = 1; //multiply raw analog value by this to obtain the temperature
 const float pulse_ratio = 550;
@@ -32,7 +36,7 @@ void displayInit() { //initialize the display
   
 }
 
-void refreshScreen(float flow, float temperature) { //refresh the screen
+void refreshScreen(float flow, float temperature, int pls) { //refresh the screen
   if (flow>0) digitalWrite(27, HIGH); //if flow exists, turn on the screen
     else digitalWrite(27, LOW);
   int val = 5;
@@ -42,7 +46,7 @@ void refreshScreen(float flow, float temperature) { //refresh the screen
   display.setTextColor(BLACK);
   display.setCursor(0,0);
   display.write("Flow: ");
-  String s = String(flow, 3);
+  String s = String(flow, 3) + " L";
   char c[10];
   s.toCharArray(c, 16);
   display.write(c);
@@ -50,14 +54,14 @@ void refreshScreen(float flow, float temperature) { //refresh the screen
   //show temp
   display.setCursor(0,10);
   display.write("Temp: ");
-  String s2 = String(temperature);
+  String s2 = String(temperature, 1) + "  C";
   char c2[10];
   s2.toCharArray(c2, 16);
   display.write(c2); 
   for(int i = 1; i<84;++i) {
     flowARR[i -1] = flowARR[i];
   }
-  flowARR[83] = flow;
+  flowARR[83] = pls;
   float max = 0;
   for (int i = 0; i<84; ++i) {
     if (flowARR[i] > max) max = flowARR[i];
@@ -111,17 +115,25 @@ void add_json_object(String tag, float value) {
 void getData() {
   Serial.println("Sending data");
   jsonDocument.clear(); // Clear json buffer
-  float amount_difference = pulses /550;
+  float amount_difference = (float)pulses/660;
+  int pls;
+  if (pulses == pulses)
+    pls = pulses;
+  else pls = 0;
   //amount_difference = random(100);
-  pulses = 0;
-  float temperature = analogRead(32)*a;
-  //temperature = 44.356;
+  
+  float read = analogRead(32);
+  float r = (208896000/read)-51000;
+  float temperature = (3828.21168/(log10(r/0.000145475)))-423.80602;
   add_json_object("amount_difference", amount_difference);
+  //add_json_object("amount_difference", pulses);
   add_json_object("temperature", temperature);
   serializeJson(jsonDocument, buffer);
   server.send(200, "application/json", buffer);
-  refreshScreen(amount_difference/((millis()-lastTime)/1000), temperature);
+  refreshScreen((float)amount_difference/((millis()-lastTime)/1000), temperature, pls);
+  //refreshScreen(pulses, temperature);
   lastTime = millis();
+  pulses = 0;
 }
 
 
@@ -132,17 +144,21 @@ void setupRouting() {
 
 void pulseCounter() {
   pulses++;
+  Serial.println("puls");
 }
 
+void IRAM_ATTR ISR() {
+    pulses++;
+}
 void setup() {
   // put your setup code here, to run once:
   
   Serial.begin (9600);
   pinMode(27, OUTPUT);
-  attachInterrupt(flow_pin, pulseCounter, CHANGE);
+  pinMode(flow_pin, INPUT);
+  attachInterrupt(flow_pin, ISR, CHANGE);
   displayInit();
   connectToWiFi();
-  randomSeed(212);
   setupRouting();
 }
 
